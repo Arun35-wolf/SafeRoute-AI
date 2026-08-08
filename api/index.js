@@ -31,7 +31,7 @@ app.get("/api/conditions", (req, res) => {
 
 // ---------------------------------------------------------
 // POST /api/route
-// Real OSRM road routes + SafeRoute safety scoring
+// Real OSRM routes + SafeRoute safety scoring
 // ---------------------------------------------------------
 app.post("/api/route", async (req, res) => {
   const { origin, destination } = req.body || {};
@@ -56,14 +56,13 @@ app.post("/api/route", async (req, res) => {
     const places = generatePlacesNear(midLat, midLng, 8);
     const reports = store.getReports();
 
-    const result = await generateRoutes(
-      origin,
-      destination,
-      reports,
-      places
-    );
-
-    const { routes, recommendedId } = result;
+    const { routes, recommendedId } =
+      await generateRoutes(
+        origin,
+        destination,
+        reports,
+        places
+      );
 
     const conditions = currentConditions();
 
@@ -76,7 +75,7 @@ app.post("/api/route", async (req, res) => {
       ts: Date.now()
     });
 
-    res.json({
+    return res.json({
       routes,
       recommendedId,
       places,
@@ -86,16 +85,16 @@ app.post("/api/route", async (req, res) => {
   } catch (error) {
     console.error("Route generation failed:", error);
 
-    res.status(502).json({
+    return res.status(502).json({
       error: "Unable to calculate route",
       details: error.message
     });
   }
 });
+
 // ---------------------------------------------------------
 // GET /api/alerts
 // ---------------------------------------------------------
-
 const ALERT_TEMPLATES = [
   {
     type: "lighting",
@@ -149,19 +148,24 @@ app.get("/api/alerts", (req, res) => {
     !isNaN(lat) && !isNaN(lng)
       ? { lat, lng }
       : lastRoute
-      ? {
-          lat: lastRoute.midLat,
-          lng: lastRoute.midLng
-        }
-      : {
-          lat: 22.5726,
-          lng: 88.3639
-        };
+        ? {
+            lat: lastRoute.midLat,
+            lng: lastRoute.midLng
+          }
+        : {
+            lat: 22.5726,
+            lng: 88.3639
+          };
 
-  const bucket = Math.floor(Date.now() / (1000 * 15));
+  const bucket = Math.floor(
+    Date.now() / (1000 * 15)
+  );
 
   const count =
-    3 + Math.floor(seededRandom(bucket, 1, 3) * 3);
+    3 +
+    Math.floor(
+      seededRandom(bucket, 1, 3) * 3
+    );
 
   const synthetic = [];
 
@@ -169,8 +173,11 @@ app.get("/api/alerts", (req, res) => {
     const t =
       ALERT_TEMPLATES[
         Math.floor(
-          seededRandom(bucket + i, 2, 9) *
-            ALERT_TEMPLATES.length
+          seededRandom(
+            bucket + i,
+            2,
+            9
+          ) * ALERT_TEMPLATES.length
         )
       ];
 
@@ -178,11 +185,19 @@ app.get("/api/alerts", (req, res) => {
 
     const lat2 =
       anchor.lat +
-      (seededRandom(bucket + i, 3, 4) - 0.5) * jitter;
+      (seededRandom(
+        bucket + i,
+        3,
+        4
+      ) - 0.5) * jitter;
 
     const lng2 =
       anchor.lng +
-      (seededRandom(bucket + i, 4, 5) - 0.5) * jitter;
+      (seededRandom(
+        bucket + i,
+        4,
+        5
+      ) - 0.5) * jitter;
 
     synthetic.push({
       id: `alert_${bucket}_${i}`,
@@ -195,7 +210,11 @@ app.get("/api/alerts", (req, res) => {
       timestamp:
         Date.now() -
         Math.floor(
-          seededRandom(bucket + i, 5, 6) *
+          seededRandom(
+            bucket + i,
+            5,
+            6
+          ) *
             1000 *
             60 *
             45
@@ -217,7 +236,10 @@ app.get("/api/alerts", (req, res) => {
       source: "community"
     }));
 
-  const combined = [...community, ...synthetic].sort(
+  const combined = [
+    ...community,
+    ...synthetic
+  ].sort(
     (a, b) => b.timestamp - a.timestamp
   );
 
@@ -228,10 +250,8 @@ app.get("/api/alerts", (req, res) => {
 
 // ---------------------------------------------------------
 // POST /api/report
-// Real road raoutes from OSRM + SfaeRouth Safety Scoring
 // ---------------------------------------------------------
-
-app.post("/api/report", async (req, res) => {
+app.post("/api/report", (req, res) => {
   const {
     type,
     severity,
@@ -255,15 +275,23 @@ app.post("/api/report", async (req, res) => {
       Math.random() * 1e4
     )}`,
     type,
-    severity: ["low", "medium", "high"].includes(severity)
+    severity: [
+      "low",
+      "medium",
+      "high"
+    ].includes(severity)
       ? severity
       : "medium",
     lat,
     lng,
-    description: (description || "").slice(0, 280),
+    description: (description || "").slice(
+      0,
+      280
+    ),
     timestamp: Date.now(),
     text:
-      description && description.trim()
+      description &&
+      description.trim()
         ? description.trim()
         : `${type} reported by a community member`
   };
@@ -279,81 +307,13 @@ app.post("/api/report", async (req, res) => {
 // ---------------------------------------------------------
 // POST /api/sos
 // ---------------------------------------------------------
-
 app.post("/api/sos", (req, res) => {
-  const { lat, lng, contacts } = req.body || {};
-  if (
-    !origin ||
-    !destination ||
-    typeof origin.lat !== "number" ||
-    typeof origin.lng !== "number" ||
-    typeof destination.lat !== "number" ||
-    typeof destination.lng !== "number"
-  ) {
-    return res.status(400).json({
-      error:
-        "origin and destination ({lat,lng}) are required"
-    });
-  }
+  const {
+    lat,
+    lng,
+    contacts
+  } = req.body || {};
 
-  try {
-    const midLat =
-      (origin.lat + destination.lat) / 2;
-
-    const midLng =
-      (origin.lng + destination.lng) / 2;
-
-    const places =
-      generatePlacesNear(
-        midLat,
-        midLng,
-        8
-      );
-
-    const reports =
-      store.getReports();
-
-    const {
-      routes,
-      recommendedId
-    } = await generateRoutes(
-      origin,
-      destination,
-      reports,
-      places
-    );
-
-    const conditions =
-      currentConditions();
-
-    store.setLastRoute({
-      origin,
-      destination,
-      midLat,
-      midLng,
-      routes,
-      ts: Date.now()
-    });
-
-    res.json({
-      routes,
-      recommendedId,
-      places,
-      conditions
-    });
-  } catch (error) {
-    console.error(
-      "Route generation failed:",
-      error
-    );
-
-    res.status(502).json({
-      error:
-        "Unable to calculate a real road route right now.",
-      details:
-        error.message
-    });
-  }
   if (
     typeof lat !== "number" ||
     typeof lng !== "number"
@@ -363,26 +323,45 @@ app.post("/api/sos", (req, res) => {
     });
   }
 
-  const places = generatePlacesNear(lat, lng, 8);
+  const places =
+    generatePlacesNear(lat, lng, 8);
 
   const nearestPolice = places
-    .filter((p) => p.type === "police")
+    .filter(
+      (p) => p.type === "police"
+    )
     .sort(
       (a, b) =>
-        haversineKm({ lat, lng }, a) -
-        haversineKm({ lat, lng }, b)
+        haversineKm(
+          { lat, lng },
+          a
+        ) -
+        haversineKm(
+          { lat, lng },
+          b
+        )
     )[0];
 
   const nearestHospital = places
-    .filter((p) => p.type === "hospital")
+    .filter(
+      (p) => p.type === "hospital"
+    )
     .sort(
       (a, b) =>
-        haversineKm({ lat, lng }, a) -
-        haversineKm({ lat, lng }, b)
+        haversineKm(
+          { lat, lng },
+          a
+        ) -
+        haversineKm(
+          { lat, lng },
+          b
+        )
     )[0];
 
   const ticketId =
-    `SOS-${Date.now().toString(36).toUpperCase()}`;
+    `SOS-${Date.now()
+      .toString(36)
+      .toUpperCase()}`;
 
   const entry = {
     ticketId,
@@ -405,11 +384,15 @@ app.post("/api/sos", (req, res) => {
       ? Math.max(
           2,
           Math.round(
-            haversineKm({ lat, lng }, nearestPolice) * 4
+            haversineKm(
+              { lat, lng },
+              nearestPolice
+            ) * 4
           )
         )
       : null,
-    contactsNotified: (contacts || []).length,
+    contactsNotified:
+      (contacts || []).length,
     note:
       "DEMO ONLY — no real emergency services or contacts were notified."
   });
@@ -418,12 +401,11 @@ app.post("/api/sos", (req, res) => {
 // ---------------------------------------------------------
 // Health check
 // ---------------------------------------------------------
-
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true
   });
 });
 
-// IMPORTANT FOR VERCEL
+// Vercel serverless export
 module.exports = app;
