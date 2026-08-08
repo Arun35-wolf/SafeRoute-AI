@@ -124,19 +124,42 @@ document.getElementById('findRouteBtn').addEventListener('click', findRoutes);
 
 async function findRoutes() {
   if (!state.origin || !state.destination) return;
+
   const btn = document.getElementById('findRouteBtn');
+
   btn.disabled = true;
-  btn.textContent = 'Analyzing streets…';
+  btn.textContent = 'Finding real routes…';
 
   try {
     const res = await fetch('/api/route', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ origin: state.origin, destination: state.destination }),
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        origin: state.origin,
+        destination: state.destination
+      })
     });
+
     const data = await res.json();
+
+    // Show the actual backend error instead of
+    // pretending the server is offline.
+    if (!res.ok) {
+      throw new Error(
+        data.details ||
+        data.error ||
+        `Route request failed (${res.status})`
+      );
+    }
+
+    if (!Array.isArray(data.routes) || data.routes.length === 0) {
+      throw new Error('No routes were returned by the routing service.');
+    }
+
     state.routes = data.routes;
-    state.places = data.places;
+    state.places = data.places || [];
     state.activeRouteId = data.recommendedId;
 
     drawRoutes();
@@ -149,11 +172,22 @@ async function findRoutes() {
     document.getElementById('routesPanel').hidden = false;
     document.getElementById('reportPanel').hidden = false;
 
-    state.alertsAnchor = midpointOf(state.origin, state.destination);
+    state.alertsAnchor =
+      midpointOf(state.origin, state.destination);
+
     refreshAlerts();
-    pushToast('Route analysis complete — 3 paths scored.');
+
+    pushToast(
+      `Route analysis complete — ${data.routes.length} real road route(s) scored.`
+    );
+
   } catch (e) {
-    pushToast('Could not reach the safety engine. Is the server running?');
+    console.error('Route request failed:', e);
+
+    pushToast(
+      `Route error: ${e.message}`
+    );
+
   } finally {
     btn.disabled = false;
     btn.textContent = 'Find safest route';
