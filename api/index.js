@@ -31,53 +31,67 @@ app.get("/api/conditions", (req, res) => {
 
 // ---------------------------------------------------------
 // POST /api/route
+// Real OSRM road routes + SafeRoute safety scoring
 // ---------------------------------------------------------
-app.post("/api/route", (req, res) => {
+app.post("/api/route", async (req, res) => {
   const { origin, destination } = req.body || {};
 
   if (
     !origin ||
     !destination ||
     typeof origin.lat !== "number" ||
-    typeof destination.lat !== "number"
+    typeof origin.lng !== "number" ||
+    typeof destination.lat !== "number" ||
+    typeof destination.lng !== "number"
   ) {
     return res.status(400).json({
       error: "origin and destination ({lat,lng}) are required"
     });
   }
 
-  const midLat = (origin.lat + destination.lat) / 2;
-  const midLng = (origin.lng + destination.lng) / 2;
+  try {
+    const midLat = (origin.lat + destination.lat) / 2;
+    const midLng = (origin.lng + destination.lng) / 2;
 
-  const places = generatePlacesNear(midLat, midLng, 8);
-  const reports = store.getReports();
+    const places = generatePlacesNear(midLat, midLng, 8);
+    const reports = store.getReports();
 
-  const { routes, recommendedId } = await generateRoutes(
-    origin,
-    destination,
-    reports,
-    places
-  );
+    const result = await generateRoutes(
+      origin,
+      destination,
+      reports,
+      places
+    );
 
-  const conditions = currentConditions();
+    const { routes, recommendedId } = result;
 
-  store.setLastRoute({
-    origin,
-    destination,
-    midLat,
-    midLng,
-    routes,
-    ts: Date.now()
-  });
+    const conditions = currentConditions();
 
-  res.json({
-    routes,
-    recommendedId,
-    places,
-    conditions
-  });
+    store.setLastRoute({
+      origin,
+      destination,
+      midLat,
+      midLng,
+      routes,
+      ts: Date.now()
+    });
+
+    res.json({
+      routes,
+      recommendedId,
+      places,
+      conditions
+    });
+
+  } catch (error) {
+    console.error("Route generation failed:", error);
+
+    res.status(502).json({
+      error: "Unable to calculate route",
+      details: error.message
+    });
+  }
 });
-
 // ---------------------------------------------------------
 // GET /api/alerts
 // ---------------------------------------------------------
