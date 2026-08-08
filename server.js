@@ -26,7 +26,8 @@ app.get("/api/conditions", (req, res) => {
 });
 
 // ---------------------------------------------------------------------
-// POST /api/route — real OSRM routes + SafeRoute safety scoring
+// POST /api/route
+// Real OSRM road routes + SafeRoute safety scoring
 // ---------------------------------------------------------------------
 app.post("/api/route", async (req, res) => {
   const { origin, destination } = req.body || {};
@@ -51,12 +52,14 @@ app.post("/api/route", async (req, res) => {
     const places = generatePlacesNear(midLat, midLng, 8);
     const reports = store.getReports();
 
-    const { routes, recommendedId } = await generateRoutes(
+    const result = await generateRoutes(
       origin,
       destination,
       reports,
       places
     );
+
+    const { routes, recommendedId } = result;
 
     const conditions = currentConditions();
 
