@@ -52,7 +52,7 @@ app.post("/api/route", (req, res) => {
   const places = generatePlacesNear(midLat, midLng, 8);
   const reports = store.getReports();
 
-  const { routes, recommendedId } = generateRoutes(
+  const { routes, recommendedId } = await generateRoutes(
     origin,
     destination,
     reports,
@@ -214,9 +214,10 @@ app.get("/api/alerts", (req, res) => {
 
 // ---------------------------------------------------------
 // POST /api/report
+// Real road raoutes from OSRM + SfaeRouth Safety Scoring
 // ---------------------------------------------------------
 
-app.post("/api/report", (req, res) => {
+app.post("/api/report", async (req, res) => {
   const {
     type,
     severity,
@@ -267,7 +268,78 @@ app.post("/api/report", (req, res) => {
 
 app.post("/api/sos", (req, res) => {
   const { lat, lng, contacts } = req.body || {};
+  if (
+    !origin ||
+    !destination ||
+    typeof origin.lat !== "number" ||
+    typeof origin.lng !== "number" ||
+    typeof destination.lat !== "number" ||
+    typeof destination.lng !== "number"
+  ) {
+    return res.status(400).json({
+      error:
+        "origin and destination ({lat,lng}) are required"
+    });
+  }
 
+  try {
+    const midLat =
+      (origin.lat + destination.lat) / 2;
+
+    const midLng =
+      (origin.lng + destination.lng) / 2;
+
+    const places =
+      generatePlacesNear(
+        midLat,
+        midLng,
+        8
+      );
+
+    const reports =
+      store.getReports();
+
+    const {
+      routes,
+      recommendedId
+    } = await generateRoutes(
+      origin,
+      destination,
+      reports,
+      places
+    );
+
+    const conditions =
+      currentConditions();
+
+    store.setLastRoute({
+      origin,
+      destination,
+      midLat,
+      midLng,
+      routes,
+      ts: Date.now()
+    });
+
+    res.json({
+      routes,
+      recommendedId,
+      places,
+      conditions
+    });
+  } catch (error) {
+    console.error(
+      "Route generation failed:",
+      error
+    );
+
+    res.status(502).json({
+      error:
+        "Unable to calculate a real road route right now.",
+      details:
+        error.message
+    });
+  }
   if (
     typeof lat !== "number" ||
     typeof lng !== "number"
