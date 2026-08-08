@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>SafeRoute AI — Walk the Lit Path</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔦</text></svg>" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div class="brand-text">
+        <h1>SafeRoute<span class="accent">AI</span></h1>
+        <p class="tagline">Walk the lit path.</p>
+      </div>
+    </div>
+
+    <div class="conditions" id="conditions">
+      <div class="cond-item">
+        <span class="cond-label">Local time</span>
+        <span class="cond-value mono" id="clockValue">--:--</span>
+      </div>
+      <div class="cond-item">
+        <span class="cond-label">Day part</span>
+        <span class="cond-value" id="dayPartValue">—</span>
+      </div>
+      <div class="cond-item">
+        <span class="cond-label">Weather</span>
+        <span class="cond-value" id="weatherValue">—</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn ghost" id="contactsBtn" type="button">Trusted contacts <span class="pill" id="contactsCount">0</span></button>
+    </div>
+  </header>
+
+  <!-- ============ MAIN LAYOUT ============ -->
+  <main class="layout">
+
+    <!-- ---------- SIDEBAR ---------- -->
+    <aside class="sidebar">
+
+      <section class="panel">
+        <h2 class="panel-title">Plan a route</h2>
+        <p class="panel-hint">Click the map to set <strong class="dot-origin">origin</strong> then <strong class="dot-dest">destination</strong> — or drop a pin with the fields below.</p>
+
+        <div class="field-row">
+          <label>Origin</label>
+          <div class="field-input">
+            <span class="pin pin-origin" aria-hidden="true"></span>
+            <input type="text" id="originInput" placeholder="Click map or use current location" readonly />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <label>Destination</label>
+          <div class="field-input">
+            <span class="pin pin-dest" aria-hidden="true"></span>
+            <input type="text" id="destInput" placeholder="Click map to set" readonly />
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn small" id="useLocationBtn" type="button">Use my location</button>
+          <button class="btn small" id="swapBtn" type="button">Swap</button>
+          <button class="btn small" id="demoBtn" type="button">Try demo points</button>
+        </div>
+
+        <button class="btn primary full" id="findRouteBtn" type="button" disabled>Find safest route</button>
+      </section>
+
+      <section class="panel" id="scorePanel" hidden>
+        <h2 class="panel-title">Safety score</h2>
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 160 160" class="gauge">
+            <circle cx="80" cy="80" r="68" class="gauge-track"></circle>
+            <circle cx="80" cy="80" r="68" class="gauge-fill" id="gaugeFill"></circle>
+          </svg>
+          <div class="gauge-center">
+            <span class="gauge-number mono" id="gaugeNumber">--</span>
+            <span class="gauge-label">/ 100</span>
+          </div>
+        </div>
+        <p class="gauge-caption" id="gaugeCaption">Select a route to see its safety score.</p>
+
+        <div class="breakdown" id="breakdown"></div>
+      </section>
+
+      <section class="panel" id="routesPanel" hidden>
+        <h2 class="panel-title">Route options</h2>
+        <div class="route-list" id="routeList"></div>
+      </section>
+
+      <section class="panel" id="reportPanel" hidden>
+        <h2 class="panel-title">Report something</h2>
+        <p class="panel-hint">Your report updates the live safety score for everyone nearby.</p>
+        <div class="field-row">
+          <label>Type</label>
+          <select id="reportType">
+            <option value="lighting">Poor lighting</option>
+            <option value="suspicious">Suspicious activity</option>
+            <option value="harassment">Harassment</option>
+            <option value="crowd">Unusually empty</option>
+            <option value="construction">Obstruction / construction</option>
+            <option value="police_presence">Police presence (reassuring)</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label>Severity</label>
+          <select id="reportSeverity">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <label>Note (optional)</label>
+          <input type="text" id="reportNote" placeholder="e.g. Broken streetlight near the corner" maxlength="140" />
+        </div>
+        <p class="panel-hint small" id="reportLocHint">Pin location: click anywhere on the map first.</p>
+        <button class="btn secondary full" id="submitReportBtn" type="button" disabled>Submit report</button>
+      </section>
+
+    </aside>
+
+    <!-- ---------- MAP ---------- -->
+    <section class="map-wrap">
+      <div id="map"></div>
+
+      <div class="map-legend">
+        <span><i class="swatch safe"></i>Safe</span>
+        <span><i class="swatch caution"></i>Caution</span>
+        <span><i class="swatch danger"></i>High risk</span>
+      </div>
+
+      <div class="toast-stack" id="toastStack"></div>
+
+      <div class="alerts-feed" id="alertsFeed">
+        <div class="alerts-head">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span>Live nearby reports</span>
+        </div>
+        <div class="alerts-list" id="alertsList">
+          <p class="alerts-empty">Plan a route to see live activity along the way.</p>
+        </div>
+      </div>
+
+      <!-- SOS Beacon -->
+      <button class="sos-beacon" id="sosBtn" type="button" aria-label="Emergency SOS">
+        <span class="sos-rings" aria-hidden="true"></span>
+        <span class="sos-label">SOS</span>
+      </button>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ SOS CONFIRM MODAL ============ -->
+<div class="modal-overlay" id="sosModal" hidden>
+  <div class="modal sos-modal">
+    <h3>Sending emergency alert</h3>
+    <p>Your location and trusted contacts will be notified. This is a demo — no real services are contacted.</p>
+    <div class="countdown-bar"><div class="countdown-fill" id="countdownFill"></div></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="sosCancelBtn" type="button">Cancel</button>
+      <button class="btn danger" id="sosConfirmBtn" type="button">Send now</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="sosResultModal" hidden>
+  <div class="modal sos-result-modal">
+    <div class="sos-result-badge">Alert sent</div>
+    <h3 id="sosTicket">Ticket —</h3>
+    <div class="sos-result-grid" id="sosResultGrid"></div>
+    <p class="panel-hint small">DEMO ONLY — no real emergency services or contacts were notified.</p>
+    <button class="btn primary full" id="sosResolveBtn" type="button">Close</button>
+  </div>
+</div>
+
+<!-- ============ TRUSTED CONTACTS MODAL ============ -->
+<div class="modal-overlay" id="contactsModal" hidden>
+  <div class="modal">
+    <h3>Trusted contacts</h3>
+    <p class="panel-hint">Notified automatically if you trigger SOS. Stored on this device only.</p>
+    <div class="contacts-list" id="contactsList"></div>
+    <div class="field-row two-col">
+      <input type="text" id="contactName" placeholder="Name" />
+      <input type="text" id="contactPhone" placeholder="Phone" />
+    </div>
+    <button class="btn secondary full" id="addContactBtn" type="button">Add contact</button>
+    <button class="btn ghost full" id="closeContactsBtn" type="button">Done</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
